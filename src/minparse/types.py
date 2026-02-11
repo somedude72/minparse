@@ -6,7 +6,7 @@ imported via `import minparse` and can be retrieved via `minparse.__all__`.
 __all__ = [
     "BIN",
     "STR",
-    "NUM",
+    "INT",
     "ParserConfig",
     "ParserResult",
     "ParserConfigError",
@@ -15,7 +15,7 @@ __all__ = [
 
 BIN = object()
 STR = object()
-NUM = object()
+INT = object()
 
 
 class ParserConfig:

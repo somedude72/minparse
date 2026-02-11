@@ -8,7 +8,7 @@ from .types import (
     ParserUserError, 
     BIN, 
     STR, 
-    NUM
+    INT
 )
 
 __all__ = [
@@ -22,5 +22,5 @@ __all__ = [
     "ParserUserError",
     "BIN",
     "STR",
-    "NUM",
+    "INT",
 ]
