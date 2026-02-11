@@ -13,7 +13,7 @@ from types import EllipsisType
 from .types import (
     BIN, 
     STR, 
-    NUM,
+    INT,
     ParserConfig, 
     ParserResult, 
     ParserConfigError, 
@@ -69,7 +69,7 @@ def _check_config_integrity():
             raise ParserConfigError(
                 f"Each optional key must be a string: "
                 f"the optional '{arg}' is not a string. ")
-        if conf[0] not in [BIN, NUM, STR]:
+        if conf[0] not in [BIN, INT, STR]:
             raise ParserConfigError(
                 f"The zeroth index of each optionals config must be either "
                 f"BINARY_ONLY, NUMBER_ONLY, or STRING_ONLY: that is not the "
@@ -126,7 +126,7 @@ def _initialize_result(result):
     for arg, conf in opt_conf.items():
         if conf[0] is BIN:
             result._optional_args[arg] = False
-        if conf[0] is NUM:
+        if conf[0] is INT:
             result._optional_args[arg] = 0
         if conf[0] is STR:
             result._optional_args[arg] = ""
@@ -145,7 +145,7 @@ def _get_safe_term_width():
 def _long_flag_with_tail(conf):
     type = conf[0]
     tail = " <str>" if type is STR else ""
-    tail = " <int>" if type is NUM else tail
+    tail = " <int>" if type is INT else tail
     return conf[2] + tail
 
 
@@ -338,7 +338,7 @@ def _next_regular_flag_parser(result, args_left, opt_conf):
             f"Bad formatting: mission argument "
             f"for option '{arg}'. ")
     
-    if tp is NUM:
+    if tp is INT:
         if opt_result[name].isdigit():
             opt_result[name] = int(opt_result[name])
         else:
@@ -408,12 +408,20 @@ def parse_arguments() -> None:
     pos_config = Config.positional_args.copy()
     opt_config = Config.optional_args.copy()
     args_left = _split_equal_sgn(args_left)
+    no_more_optionals = False
 
     while args_left:
         # Note: The following helper functions only parses the 0th args_left and
         # deletes everything that's already been parsed. This is why the loop
         # does not end until args_left is empty.
-        if _is_regular_flag(args_left[0]):
+        if args_left[0] == "--":
+            no_more_optionals = True
+            args_left = args_left[1:]
+            continue
+
+        if no_more_optionals:
+            _next_positional_parser(Result, args_left, pos_config)
+        elif _is_regular_flag(args_left[0]):
             _next_regular_flag_parser(Result, args_left, opt_config)
         elif _is_stacked_flag(args_left[0]):
             _next_stacked_flag_parser(Result, args_left, opt_config)
