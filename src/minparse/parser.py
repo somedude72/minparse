@@ -21,14 +21,69 @@ from .types import (
 )
 
 __all__ = [
-    "Config",
-    "Result",
+    "config",
+    "result",
     "generate_help",
     "parse_arguments"
 ]
 
-Config: ParserConfig = ParserConfig()
-Result: ParserResult = ParserResult()
+
+# ==========
+# Variables
+# ==========
+
+# These are accessed through functions because docstrings are cool. 
+_config: ParserConfig = ParserConfig()
+_result: ParserResult = ParserResult()
+
+
+def config() -> ParserConfig:
+    """Configuration for the argument parser and auto help generator.
+
+    A positional argument is identified by its position whereas an optional
+    argument is specified by a flag and optionally accepts values (e.g. --list). 
+    
+    :positional_args: A list of string representing the unique name of that
+        positional argument. The last list element may be ellipsis (...) to
+        signify that the second to last list element takes in a varidic
+        number of arguments. 
+
+    :optional_args: A dictionary that maps the keys of the optionals to tuples
+        with indices specifying the type of argument to take, the short flag,
+        the long flag, and the help text. 
+
+        The type of arguments allowed can either be `BIN`, `STR`, or `INT`. The
+        help text and either the short or the long flag may be set to None. If
+        the help text is none, the optional flag will not have a line in the
+        auto-generated help text.
+
+        The short and the long flag must be unique over all optionals. 
+
+    :program_name: The name of the program to show in the generated usage text
+
+    :help_preamble: A short description to print immediately before the help. 
+
+    :help_postamble: A short description to print immediately after the help. 
+    """
+    return _config
+
+
+def result() -> ParserResult:
+    """Resulting parsed arguments for the program
+
+    :positional_args: A dictionary mapping the programmatic names of the
+        positionals in the config to the values parsed from cli arguments. 
+
+    :optional_args: A dictionary mapping the programmatic names of the optional
+        args in the config to the string (or boolean) values parsed from cli
+        flags. 
+
+    :generated_usage: A string consisting of the usage text. Useful for printing
+        when exiting due to the user inputting an invalid optional flag. 
+
+    :generated_help: A string consisting of both the usage text and the help. 
+    """
+    return _result
 
 
 # ===============
@@ -38,8 +93,8 @@ Result: ParserResult = ParserResult()
 def _check_config_integrity():
     # Attempt to catch any errors in configuration so that the parser will not
     # crash to do, for example, bad variable types in the config. 
-    pos_conf = Config.positional_args
-    opt_conf = Config.optional_args
+    pos_conf = _config.positional_args
+    opt_conf = _config.optional_args
 
     seen_positional = set()
     for i, conf in enumerate(pos_conf):
@@ -69,6 +124,10 @@ def _check_config_integrity():
             raise ParserConfigError(
                 f"Each optional key must be a string: "
                 f"the optional '{arg}' is not a string. ")
+        if len(conf) != 4:
+            raise ParserConfigError(
+                f"Each optional configuration must be a tuple with four "
+                f"elements: that is not the case for the '{arg}' optional. ")
         if conf[0] not in [BIN, INT, STR]:
             raise ParserConfigError(
                 f"The zeroth index of each optionals config must be either "
@@ -105,21 +164,21 @@ def _check_config_integrity():
         seen_short_flags.add(conf[1])
         seen_short_flags.add(conf[2])
 
-    if type(Config.program_name) not in [str, type(None)]:
+    if type(_config.program_name) not in [str, type(None)]:
         raise ParserConfigError(f"The program name must be of str type (or None)")
-    if type(Config.help_preamble) not in [str, type(None)]:
+    if type(_config.help_preamble) not in [str, type(None)]:
         raise ParserConfigError(f"The help preamble must be of str type (or None)")
-    if type(Config.help_postamble) not in [str, type(None)]:
+    if type(_config.help_postamble) not in [str, type(None)]:
         raise ParserConfigError(f"The help postamble must be of str type (or None)")
 
 
 def _initialize_result(result):
-    pos_conf = Config.positional_args
-    opt_conf = Config.optional_args
+    pos_conf = _config.positional_args
+    opt_conf = _config.optional_args
 
     for arg in pos_conf:
         result._positional_args[arg] = ""
-    if pos_conf[-1] is Ellipsis:
+    if pos_conf and pos_conf[-1] is Ellipsis:
         result._positional_args[pos_conf[-2]] = []
         del result._positional_args[Ellipsis]
 
@@ -169,7 +228,10 @@ def _wrap_help_ambles(text):
 
 
 def _generate_usage(pos_conf, opt_conf, program):
-    usage = ["Usage: " + program + " [options ...] "]
+    usage = ["Usage: " + program]
+
+    if opt_conf:
+        usage[0] += " [options ...] "
 
     # Short flag generation
     short_flags = ""
@@ -192,7 +254,7 @@ def _generate_usage(pos_conf, opt_conf, program):
         long_flags = long_flags[1:]
     
     # Positionals generation with line wrap
-    if pos_conf[-1] is Ellipsis:
+    if pos_conf and pos_conf[-1] is Ellipsis:
         pos_conf.pop()
         pos_conf[-1] += " ..."
     for arg in pos_conf:
@@ -204,6 +266,9 @@ def _generate_usage(pos_conf, opt_conf, program):
 
 
 def _generate_opt_lines(opt_conf):
+    if not opt_conf:
+        return []
+
     opt_lines = []
     col_2_beg = 5
     col_3_beg = 3 + col_2_beg + max(
@@ -236,21 +301,18 @@ def _generate_opt_lines(opt_conf):
 
 def generate_help():
     """Generates the help and usage messages for the program according to
-    `minparse.Config`. This will rewrap any help text specified in the config to
-    terminal width. 
-    
-    Help lines will not be generated if the option's help configuration is None.
-    In that case, the flag will be added to the usage description. 
+    `minparse.Config`. This function populates the `generated_usage` and
+    `generated_help` attributes in the `minparse.Result` object. 
     """
 
-    global Result
+    global _result
     _check_config_integrity()
     
-    program = Config.program_name or os.path.basename(sys.argv[0])
-    pos_conf = Config.positional_args.copy()
-    opt_conf = Config.optional_args.copy()
-    preamble = Config.help_preamble
-    postamble = Config.help_postamble
+    program = _config.program_name or os.path.basename(sys.argv[0])
+    pos_conf = _config.positional_args.copy()
+    opt_conf = _config.optional_args.copy()
+    preamble = _config.help_preamble
+    postamble = _config.help_postamble
     
     usage = _generate_usage(pos_conf, opt_conf, program)
     opt_lines = _generate_opt_lines(opt_conf)
@@ -263,8 +325,8 @@ def generate_help():
     if postamble:
         help += "\n\n" + _wrap_help_ambles(postamble)
 
-    Result._generated_usage = usage
-    Result._generated_help = help
+    _result._generated_usage = usage
+    _result._generated_help = help
 
 
 # =============
@@ -284,7 +346,7 @@ def _is_stacked_flag(flag):
 def _get_flag_name(arg):
     # Returns the programmatic name of the flag from an argument, or otherwise
     # None if the flag does not exist. 
-    opt_flags = Config.optional_args
+    opt_flags = _config.optional_args
     return next((
         name for name, conf in opt_flags.items()
         if conf[1] == arg or conf[2] == arg), None)
@@ -386,27 +448,16 @@ def _split_equal_sgn(args):
 
 def parse_arguments() -> None:
     """Parse command line arguments using the config provided by
-    `minparse.Config`, returning the result as a `minparse.ParserResult`. See
-    the docstring for the config and result classes for more details. 
-
-    Notes:
-    
-    If ellipsis (...) was specified as the last positional, then the second to
-    last positional will take in a varidic number of elements and mapped to a
-    list of strings. 
-
-    If a positional or an optional is not specified by the user, the resulting
-    value will be defaulted to a falsy value (e.g. empty string, empty list,
-    0, False). If an optional was specified multiple times by the user, the last
-    time will take precedence. 
+    `minparse.Config`. This function populates the `positional_args` and
+    `optional_args` attributes in the `minparse.Result` object. 
     """
-    global Result
+    global _result
     _check_config_integrity()
-    _initialize_result(Result)
+    _initialize_result(_result)
 
     args_left = sys.argv[1:]
-    pos_config = Config.positional_args.copy()
-    opt_config = Config.optional_args.copy()
+    pos_config = _config.positional_args.copy()
+    opt_config = _config.optional_args.copy()
     args_left = _split_equal_sgn(args_left)
     no_more_optionals = False
 
@@ -420,10 +471,10 @@ def parse_arguments() -> None:
             continue
 
         if no_more_optionals:
-            _next_positional_parser(Result, args_left, pos_config)
+            _next_positional_parser(_result, args_left, pos_config)
         elif _is_regular_flag(args_left[0]):
-            _next_regular_flag_parser(Result, args_left, opt_config)
+            _next_regular_flag_parser(_result, args_left, opt_config)
         elif _is_stacked_flag(args_left[0]):
-            _next_stacked_flag_parser(Result, args_left, opt_config)
+            _next_stacked_flag_parser(_result, args_left, opt_config)
         else:
-            _next_positional_parser(Result, args_left, pos_config)
+            _next_positional_parser(_result, args_left, pos_config)
