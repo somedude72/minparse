@@ -1,0 +1,27 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=75.0.0", "wheel"]
+
+[project]
+authors = [{ name = "Zichen" }]
+description = "A small Python library that handles argument parsing in a semantically natural way"
+keywords = ["arguments", "commands"]
+license = { text = "MIT" }
+name = "minparse"
+readme = "README.md"
+requires-python = ">=3.12"
+version = "0.0.1"
+
+classifiers = [
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python",
+  "Environment :: Console",
+]
+
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/somedude72/minparse"
+Issues = "https://github.com/somedude72/minparse/issues"
