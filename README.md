@@ -20,8 +20,8 @@ import minparse as parser
 
 parser.config().positional_args = ["first", "last"]
 parser.config().optional_args = {
-    "help"    : (minparse.BIN, "-h", "--help", "Print the help message and quit"),
-    "verbose" : (minparse.BIN, "-v", "--verbose", "Make the program talk more")
+    "help"    : (parser.BIN, "-h", "--help", "Print the help message and quit"),
+    "verbose" : (parser.BIN, "-v", "--verbose", "Make the program talk more")
 }
 
 parser.parse_arguments()
