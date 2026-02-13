@@ -93,8 +93,8 @@ def result() -> ParserResult:
 def _check_config_integrity():
     # Attempt to catch any errors in configuration so that the parser will not
     # crash to do, for example, bad variable types in the config. 
-    pos_conf = _config.positional_args
-    opt_conf = _config.optional_args
+    pos_conf = config().positional_args
+    opt_conf = config().optional_args
 
     seen_positional = set()
     for i, conf in enumerate(pos_conf):
@@ -164,17 +164,17 @@ def _check_config_integrity():
         seen_short_flags.add(conf[1])
         seen_short_flags.add(conf[2])
 
-    if type(_config.program_name) not in [str, type(None)]:
+    if type(config().program_name) not in [str, type(None)]:
         raise ParserConfigError(f"The program name must be of str type (or None)")
-    if type(_config.help_preamble) not in [str, type(None)]:
+    if type(config().help_preamble) not in [str, type(None)]:
         raise ParserConfigError(f"The help preamble must be of str type (or None)")
-    if type(_config.help_postamble) not in [str, type(None)]:
+    if type(config().help_postamble) not in [str, type(None)]:
         raise ParserConfigError(f"The help postamble must be of str type (or None)")
 
 
 def _initialize_result(result):
-    pos_conf = _config.positional_args
-    opt_conf = _config.optional_args
+    pos_conf = config().positional_args
+    opt_conf = config().optional_args
 
     for arg in pos_conf:
         result._positional_args[arg] = ""
@@ -301,18 +301,16 @@ def _generate_opt_lines(opt_conf):
 
 def generate_help():
     """Generates the help and usage messages for the program according to
-    `minparse.Config`. This function populates the `generated_usage` and
-    `generated_help` attributes in the `minparse.Result` object. 
+    `minparse.config()`. This function populates the `generated_usage` and
+    `generated_help` attributes in `minparse.result()`. 
     """
-
-    global _result
     _check_config_integrity()
     
-    program = _config.program_name or os.path.basename(sys.argv[0])
-    pos_conf = _config.positional_args.copy()
-    opt_conf = _config.optional_args.copy()
-    preamble = _config.help_preamble
-    postamble = _config.help_postamble
+    program = config().program_name or os.path.basename(sys.argv[0])
+    pos_conf = config().positional_args.copy()
+    opt_conf = config().optional_args.copy()
+    preamble = config().help_preamble
+    postamble = config().help_postamble
     
     usage = _generate_usage(pos_conf, opt_conf, program)
     opt_lines = _generate_opt_lines(opt_conf)
@@ -325,8 +323,8 @@ def generate_help():
     if postamble:
         help += "\n\n" + _wrap_help_ambles(postamble)
 
-    _result._generated_usage = usage
-    _result._generated_help = help
+    result()._generated_usage = usage
+    result()._generated_help = help
 
 
 # =============
@@ -346,7 +344,7 @@ def _is_stacked_flag(flag):
 def _get_flag_name(arg):
     # Returns the programmatic name of the flag from an argument, or otherwise
     # None if the flag does not exist. 
-    opt_flags = _config.optional_args
+    opt_flags = config().optional_args
     return next((
         name for name, conf in opt_flags.items()
         if conf[1] == arg or conf[2] == arg), None)
@@ -448,16 +446,15 @@ def _split_equal_sgn(args):
 
 def parse_arguments() -> None:
     """Parse command line arguments using the config provided by
-    `minparse.Config`. This function populates the `positional_args` and
-    `optional_args` attributes in the `minparse.Result` object. 
+    `minparse.config()`. This function populates the `positional_args` and
+    `optional_args` attributes in the `minparse.result()` object. 
     """
-    global _result
     _check_config_integrity()
-    _initialize_result(_result)
+    _initialize_result(result())
 
     args_left = sys.argv[1:]
-    pos_config = _config.positional_args.copy()
-    opt_config = _config.optional_args.copy()
+    pos_config = config().positional_args.copy()
+    opt_config = config().optional_args.copy()
     args_left = _split_equal_sgn(args_left)
     no_more_optionals = False
 
@@ -471,10 +468,10 @@ def parse_arguments() -> None:
             continue
 
         if no_more_optionals:
-            _next_positional_parser(_result, args_left, pos_config)
+            _next_positional_parser(result(), args_left, pos_config)
         elif _is_regular_flag(args_left[0]):
-            _next_regular_flag_parser(_result, args_left, opt_config)
+            _next_regular_flag_parser(result(), args_left, opt_config)
         elif _is_stacked_flag(args_left[0]):
-            _next_stacked_flag_parser(_result, args_left, opt_config)
+            _next_stacked_flag_parser(result(), args_left, opt_config)
         else:
-            _next_positional_parser(_result, args_left, pos_config)
+            _next_positional_parser(result(), args_left, pos_config)
