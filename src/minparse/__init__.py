@@ -44,7 +44,7 @@ You can use the following example to configure the parser.
 For complete documentation, visit https://github.com/somedude72/minparse/tree/main.
 """
 
-from .parser import config, result, parse_arguments, generate_help
+from .parser import config, result, parse_arguments
 from .types import (
     ParserConfig, 
     ParserResult, 
@@ -58,7 +58,6 @@ from .types import (
 __all__ = [
     "config",
     "result",
-    "generate_help",
     "parse_arguments",
     "ParserConfig",
     "ParserResult",

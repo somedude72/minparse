@@ -23,7 +23,7 @@ from .types import (
 __all__ = [
     "config",
     "result",
-    "generate_help",
+    "_generate_help",
     "parse_arguments"
 ]
 
@@ -299,13 +299,7 @@ def _generate_opt_lines(opt_conf):
     return opt_lines
 
 
-def generate_help():
-    """Generates the help and usage messages for the program according to
-    `minparse.config()`. This function populates the `generated_usage` and
-    `generated_help` attributes in `minparse.result()`. 
-    """
-    _check_config_integrity()
-    
+def _generate_help(result):
     program = config().program_name or os.path.basename(sys.argv[0])
     pos_conf = config().positional_args.copy()
     opt_conf = config().optional_args.copy()
@@ -323,8 +317,8 @@ def generate_help():
     if postamble:
         help += "\n\n" + _wrap_help_ambles(postamble)
 
-    result()._generated_usage = usage
-    result()._generated_help = help
+    result._generated_usage = usage
+    result._generated_help = help
 
 
 # =============
@@ -450,6 +444,7 @@ def parse_arguments() -> None:
     `optional_args` attributes in the `minparse.result()` object. 
     """
     _check_config_integrity()
+    _generate_help(result())
     _initialize_result(result())
 
     args_left = sys.argv[1:]
