@@ -13,9 +13,10 @@ __all__ = [
     "ParserUserError",
 ]
 
-BIN = object()
-STR = object()
-INT = object()
+# The following are all supported value types for optional arguments
+BIN = object() # The flag can only be toggled on/off
+STR = object() # The flag accepts any string value
+INT = object() # The flag accepts any integer value
 
 
 class ParserConfig:
