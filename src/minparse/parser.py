@@ -437,7 +437,7 @@ def _split_equal_sgn(args):
     return result
 
 
-def parse_arguments() -> None:
+def parse_arguments(argv: list[str] | None = None) -> None:
     """Parse command line arguments and generate help message.
     
     Reads the config in `minparse.config()`. Stores the parsed arguments in
@@ -445,13 +445,14 @@ def parse_arguments() -> None:
     properly regardless of whether this function raises an error due to bad
     command line arguments. 
 
-    This function automatically ingests sys.argv. 
+    :argv: You can specify the argv to be parsed. The default is None, in which
+        case the function will automatically ingest args via sys.argv. 
     """
     _check_config_integrity()
     _generate_help(result())
     _initialize_result(result())
 
-    args_left = sys.argv[1:]
+    args_left = argv or sys.argv[1:]
     pos_config = config().positional_args.copy()
     opt_config = config().optional_args.copy()
     args_left = _split_equal_sgn(args_left)
