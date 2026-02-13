@@ -36,7 +36,6 @@ parser.config().optional_args = {
 
 def main():
     try:
-        parser.generate_help()
         parser.parse_arguments()
     except parser.ParserUserError as e:
         print(parser.result().generated_usage)
