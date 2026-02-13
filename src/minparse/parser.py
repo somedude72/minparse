@@ -23,7 +23,6 @@ from .types import (
 __all__ = [
     "config",
     "result",
-    "_generate_help",
     "parse_arguments"
 ]
 
@@ -32,7 +31,7 @@ __all__ = [
 # Variables
 # ==========
 
-# These are accessed through functions because docstrings are cool. 
+# These are accessed through functions because docstrings are amazing. 
 _config: ParserConfig = ParserConfig()
 _result: ParserResult = ParserResult()
 
@@ -439,9 +438,14 @@ def _split_equal_sgn(args):
 
 
 def parse_arguments() -> None:
-    """Parse command line arguments using the config provided by
-    `minparse.config()`. This function populates the `positional_args` and
-    `optional_args` attributes in the `minparse.result()` object. 
+    """Parse command line arguments and generate help message.
+    
+    Reads the config in `minparse.config()`. Stores the parsed arguments in
+    `minparse.result()`. Note that the help message will be generated and stored
+    properly regardless of whether this function raises an error due to bad
+    command line arguments. 
+
+    This function automatically ingests sys.argv. 
     """
     _check_config_integrity()
     _generate_help(result())
