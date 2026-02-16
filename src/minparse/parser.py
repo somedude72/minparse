@@ -6,6 +6,7 @@ imported via `import minparse` and can be retrieved via `minparse.__all__`.
 import os
 import re
 import sys
+import string
 import textwrap
 
 from types import EllipsisType
@@ -17,7 +18,7 @@ from .types import (
     ParserConfig, 
     ParserResult, 
     ParserConfigError, 
-    ParserUserError
+    ParserResultError
 )
 
 __all__ = [
@@ -27,13 +28,9 @@ __all__ = [
 ]
 
 
-# ==========
-# Variables
-# ==========
-
-# These are accessed through functions because docstrings are amazing. 
-_config: ParserConfig = ParserConfig()
-_result: ParserResult = ParserResult()
+# ===========
+# Public API
+# ===========
 
 
 def config() -> ParserConfig:
@@ -85,9 +82,53 @@ def result() -> ParserResult:
     return _result
 
 
+def parse_arguments(argv: list[str] | None = None) -> None:
+    """Parse command line arguments and generate help message.
+    
+    Reads the config in `minparse.config()`. Stores the parsed arguments in
+    `minparse.result()`. Note that the help message will be generated and stored
+    properly regardless of whether this function raises an error due to bad
+    command line arguments. 
+
+    :argv: You can specify the argv to be parsed. The default is None, in which
+        case the function will automatically ingest args via sys.argv. 
+    """
+    _check_config_integrity()
+    _generate_help(result())
+    _initialize_result(result())
+
+    args_left = argv or sys.argv[1:]
+    pos_config = config().positional_args.copy()
+    opt_config = config().optional_args.copy()
+    no_more_optionals = False
+
+    while args_left:
+        # Note: The following helper functions only parses the 0th args_left and
+        # deletes everything that's already been parsed. This is why the loop
+        # does not end until args_left is empty.
+        if args_left[0] == "--":
+            no_more_optionals = True
+            args_left = args_left[1:]
+            continue
+
+        if no_more_optionals:
+            _next_positional_parser(result(), args_left, pos_config)
+        elif _is_regular_flag(args_left[0]):
+            _next_regular_flag_parser(result(), args_left, opt_config)
+        elif _is_stacked_flag(args_left[0]):
+            _next_stacked_flag_parser(result(), args_left, opt_config)
+        else:
+            _next_positional_parser(result(), args_left, pos_config)
+
+
 # ===============
 # Initialization
 # ===============
+
+# These are accessed through functions because docstrings are amazing. 
+_config: ParserConfig = ParserConfig()
+_result: ParserResult = ParserResult()
+
 
 def _check_config_integrity():
     # Attempt to catch any errors in configuration so that the parser will not
@@ -130,7 +171,7 @@ def _check_config_integrity():
         if conf[0] not in [BIN, INT, STR]:
             raise ParserConfigError(
                 f"The zeroth index of each optionals config must be either "
-                f"BINARY_ONLY, NUMBER_ONLY, or STRING_ONLY: that is not the "
+                f"minparse.BIN, minparse.INT, or minparse.STR: that is not the "
                 f"case for the '{arg}' optional. ")
         if type(conf[1]) not in [str, type(None)] or \
            type(conf[2]) not in [str, type(None)]:
@@ -156,6 +197,10 @@ def _check_config_integrity():
             raise ParserConfigError(
                 f"The flag of each optional must be unique: the flags "
                 f"for the optional '{arg}' has been used multiple times. ")
+        if (conf[1] and conf[1][1] not in string.ascii_letters):
+            raise ParserConfigError(
+                f"The flag of the short flag must be an ascii letter: "
+                f"that is not the case for the '{arg}' optional. ")
         if type(conf[3]) not in [str, type(None)]:
             raise ParserConfigError(
                 f"Each help message must be a string: the help message "
@@ -207,6 +252,13 @@ def _long_flag_with_tail(conf):
     return conf[2] + tail
 
 
+def _short_flag_with_tail(conf):
+    type = conf[0]
+    tail = " <str>" if type is STR else ""
+    tail = " <int>" if type is INT else tail
+    return conf[1] + tail
+
+
 def _wrap_help_line(text, indent):
     text = text.replace("\n", "")
     text = textwrap.fill(text, width=_get_safe_term_width() - indent)
@@ -218,11 +270,13 @@ def _wrap_help_ambles(text):
     # Note: ChatGPT generated. The pattern matches one linebreak followed by one
     # or more additional linebreaks (CR, LF, or CRLF) possibly separated by
     # intermediate whitespace. 
-    pattern = re.compile(r'(?:\r\n?|\n)(?:[ \t\f\v]*(?:\r\n?|\n))+')
-    text = pattern.sub("\n\n", text)
+    linebreak = re.compile(r"(?:\r\n?|\n)(?:[ \t\f\v]*(?:\r\n?|\n))+")
+    whitespace = re.compile(r"\s+")
+    text = linebreak.sub("\n\n", text)
     text = text.split("\n\n")
-    text = [textwrap.fill(seg, width=_get_safe_term_width()) for seg in text]
-    text = "\n\n".join(text)
+    text = [whitespace.sub(" ", seg).strip() for seg in text]
+    text = [textwrap.fill(seg, width=_get_safe_term_width(), tabsize=4).strip() for seg in text]
+    text = "\n\n".join([line for line in text if line])
     return text
 
 
@@ -232,25 +286,24 @@ def _generate_usage(pos_conf, opt_conf, program):
     if opt_conf:
         usage[0] += " [options ...] "
 
-    # Short flag generation
-    short_flags = ""
-    for _, conf in opt_conf.items():
-        if not conf[3] and conf[1]:
-            short_flags += conf[1][1]
-    if short_flags:
-        usage[0] += "[-" + short_flags + "] "
-
     # Long flag generation with line wrap
-    long_flags = []
+    flags = []
     for _, conf in opt_conf.items():
-        if not conf[3] and not conf[1]:
-            flag = _long_flag_with_tail(conf)
-            long_flags.append("[" + flag + "] ")
-    while long_flags:
-        if len(usage[-1] + long_flags[0]) >= 80:
+        if conf[3]:
+            continue
+        seg = "["
+        if conf[1]:
+            seg += _short_flag_with_tail(conf)
+        if conf[1] and conf[2]:
+            seg += " | "
+        if conf[2]:
+            seg += _long_flag_with_tail(conf)
+        flags.append(seg + "] ")
+    while flags:
+        if len(usage[-1] + flags[0]) >= 80:
             usage.append(" " * len("Usage: "))
-        usage[-1] += long_flags[0]
-        long_flags = long_flags[1:]
+        usage[-1] += flags[0]
+        flags = flags[1:]
     
     # Positionals generation with line wrap
     if pos_conf and pos_conf[-1] is Ellipsis:
@@ -325,13 +378,16 @@ def _generate_help(result):
 # =============
 
 def _is_regular_flag(flag):
-    return flag[0] == "-" and not _is_stacked_flag(flag)
+    return len(flag) >= 2 \
+        and flag[0] == "-" \
+        and not _is_stacked_flag(flag)
 
 
 def _is_stacked_flag(flag):
     return len(flag) >= 3  \
         and flag[0] == "-" \
-        and flag[1] != "-"
+        and flag[1] != "-" \
+        and set(flag[1:]) <= set(string.ascii_letters)
 
 
 def _get_flag_name(arg):
@@ -346,7 +402,7 @@ def _get_flag_name(arg):
 def _next_positional_parser(result, args_left, pos_conf):
     arg = args_left[0]
     if not pos_conf:
-        raise ParserUserError(
+        raise ParserResultError(
             f"Too many arguments: unexpected "
             f"positional '{arg}' received. ")
     
@@ -366,9 +422,13 @@ def _next_positional_parser(result, args_left, pos_conf):
 
 def _next_regular_flag_parser(result, args_left, opt_conf):
     arg = args_left[0]
+    if "=" in arg:
+        _next_eq_sgn_flag_parser(result, args_left, opt_conf)
+        return
+    
     name = _get_flag_name(arg)
     if not name:
-        raise ParserUserError(
+        raise ParserResultError(
             f"Invalid flag received: option '{arg}' "
             f"is not a valid argument. ")
     
@@ -387,7 +447,7 @@ def _next_regular_flag_parser(result, args_left, opt_conf):
         opt_result[name] = args_left[1]
         args_left[:] = args_left[2:]
     else:
-        raise ParserUserError(
+        raise ParserResultError(
             f"Bad formatting: mission argument "
             f"for option '{arg}'. ")
     
@@ -395,7 +455,7 @@ def _next_regular_flag_parser(result, args_left, opt_conf):
         if opt_result[name].isdigit():
             opt_result[name] = int(opt_result[name])
         else:
-            raise ParserUserError(
+            raise ParserResultError(
                 f"Bad formatting: only integers "
                 f"argument allowed for option '{arg}'. ")
 
@@ -408,13 +468,13 @@ def _next_stacked_flag_parser(result, args_left, opt_conf):
 
         name = _get_flag_name(unstacked_flag)
         if not name:
-            raise ParserUserError(
+            raise ParserResultError(
                 f"Invalid flag received: option '{unstacked_flag}' "
                 f"(in '{arg}') is not a argument. ")
 
         tp = opt_conf[name][0]
         if tp is not BIN:
-            raise ParserUserError(
+            raise ParserResultError(
                 f"Bad formatting: option '{unstacked_flag}' "
                 f"(in '{arg}') cannot be stacked. ")
         
@@ -423,55 +483,36 @@ def _next_stacked_flag_parser(result, args_left, opt_conf):
     args_left[:] = args_left[1:]
 
 
-def _split_equal_sgn(args):
-    result = []
-    for arg in args:
-        if arg == "=":
-            raise ParserUserError(f"Bad formatting: unexpected floating '=' sign. ")
-        if "=" in arg:
-            result.append(arg.split("=")[0])
-            result.append("=")
-            result.append(arg.split("=")[1])
-        else:
-            result.append(arg)
-    return result
-
-
-def parse_arguments(argv: list[str] | None = None) -> None:
-    """Parse command line arguments and generate help message.
+def _next_eq_sgn_flag_parser(result, args_left, opt_conf):
+    arg = args_left[0]
+    flag = arg.split("=")[0]
+    val = arg.split("=")[1]
+    if not val:
+        raise ParserResultError(
+            f"Bad formatting: expected value after '=' "
+            f"for the optional '{arg}'. ")
     
-    Reads the config in `minparse.config()`. Stores the parsed arguments in
-    `minparse.result()`. Note that the help message will be generated and stored
-    properly regardless of whether this function raises an error due to bad
-    command line arguments. 
+    name = _get_flag_name(flag)
+    if not name:
+        print(flag, val)
+        raise ParserResultError(
+            f"Invalid flag received: option '{arg}' "
+            f"is not a valid argument. ")
+    
+    tp = opt_conf[name][0]
+    if tp is BIN:
+        raise ParserResultError(
+            f"Bad formatting: cannot assign a value "
+            f"to '{arg}', which is a binary optional. ")
+    
+    opt_result = result._optional_args
+    opt_result[name] = val
 
-    :argv: You can specify the argv to be parsed. The default is None, in which
-        case the function will automatically ingest args via sys.argv. 
-    """
-    _check_config_integrity()
-    _generate_help(result())
-    _initialize_result(result())
-
-    args_left = argv or sys.argv[1:]
-    pos_config = config().positional_args.copy()
-    opt_config = config().optional_args.copy()
-    args_left = _split_equal_sgn(args_left)
-    no_more_optionals = False
-
-    while args_left:
-        # Note: The following helper functions only parses the 0th args_left and
-        # deletes everything that's already been parsed. This is why the loop
-        # does not end until args_left is empty.
-        if args_left[0] == "--":
-            no_more_optionals = True
-            args_left = args_left[1:]
-            continue
-
-        if no_more_optionals:
-            _next_positional_parser(result(), args_left, pos_config)
-        elif _is_regular_flag(args_left[0]):
-            _next_regular_flag_parser(result(), args_left, opt_config)
-        elif _is_stacked_flag(args_left[0]):
-            _next_stacked_flag_parser(result(), args_left, opt_config)
+    if tp is INT:
+        if opt_result[name].isdigit():
+            opt_result[name] = int(opt_result[name])
         else:
-            _next_positional_parser(result(), args_left, pos_config)
+            raise ParserResultError(
+                f"Bad formatting: only integers "
+                f"argument allowed for option '{arg}'. ")
+    args_left[:] = args_left[1:]

@@ -10,7 +10,7 @@ __all__ = [
     "ParserConfig",
     "ParserResult",
     "ParserConfigError",
-    "ParserUserError",
+    "ParserResultError",
 ]
 
 # The following are all supported value types for optional arguments
@@ -114,5 +114,5 @@ class ParserConfigError(Exception):
     """Error for fatally incorrect config by the developer"""
 
 
-class ParserUserError(Exception):
+class ParserResultError(Exception):
     """Error for fatally incorrect command line arguments by the user"""
